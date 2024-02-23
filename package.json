@@ -1,0 +1,34 @@
+{
+  "name": "hedara-cucumberls",
+  "version": "1.0.0",
+  "description": "Cucumber testcases for the hedara ledger",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alpascan/hedara-cucumberls.git"
+  },
+  "keywords": [
+    "cucumber",
+    "hedara",
+    "bdd"
+  ],
+  "author": "Alexandru Pascan",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alpascan/hedara-cucumberls/issues"
+  },
+  "homepage": "https://github.com/alpascan/hedara-cucumberls#readme",
+  "dependencies": {
+    "@cucumber/cucumber": "^10.3.1",
+    "@cucumber/pretty-formatter": "^1.0.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "eslint-plugin-promise": "^6.1.1",
+    "prettier": "^3.2.5",
+    "prettier-plugin-gherkin": "^2.2.1"
+  }
+}
