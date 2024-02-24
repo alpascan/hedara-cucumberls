@@ -1,0 +1,20 @@
+{
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"editor.formatOnSave": true,
+	"[javascript]": {
+		"editor.formatOnSave": true
+	},
+	"editor.codeActionsOnSave": {
+		"source.formatDocument": "explicit",
+		"source.fixAll.eslint": "explicit"
+	},
+	"eslint.validate": ["javascript"],
+	"cucumber.glue": ["steps/**/*.steps.js"],
+	"cucumber.features": ["features/**/*.feature"],
+	"cucumberautocomplete.steps": ["steps/**/*.steps.js"],
+	"cucumberautocomplete.syncfeatures": "features/**/*.feature",
+	"cucumberautocomplete.strictGherkinCompletion": true,
+	"[cucumber]": {
+		"editor.defaultFormatter": "CucumberOpen.cucumber-official"
+	}
+}
