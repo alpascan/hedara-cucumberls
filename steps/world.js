@@ -1,15 +1,30 @@
-import "dotenv/config"
-import { setWorldConstructor, World } from "cucumber"
-//Grab your Hedera testnet account ID and private key from your .env file
+let { setWorldConstructor, World } = require("@cucumber/cucumber")
+let { Client } = require("@hashgraph/sdk")
 
-//Grab your Hedera testnet account ID and private key from your .env file
-const myAccountId = process.env.MY_ACCOUNT_ID
-const myPrivateKey = process.env.MY_PRIVATE_KEY
+require("dotenv").config()
 
+
+// For now, this is a simple world that only contains the Hedera client
 class CustomWorld extends World {
-  client
+  client = null
   constructor(options) {
     super(options)
+    this.setupClient()
+  }
+
+  setupClient() {
+    const myAccountId = process.env.HEDERA_ACCOUNT_ID
+    const myPrivateKey = process.env.HEDERA_PRIVATE_KEY
+
+    if (!myAccountId || !myPrivateKey) {
+      throw new Error(
+        "Environment variables HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY must be present"
+      )
+    }
+
+    this.client = Client.forTestnet()
+    this.client.setOperator(myAccountId, myPrivateKey)
+    console.log("Client is set up")
   }
 }
 

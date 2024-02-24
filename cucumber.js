@@ -1,7 +1,9 @@
 const config = {
   paths: ["features/**/*.feature"],
-  require: ["steps/**/*.steps.js"],
+  require: ["steps/*.js"],
+
   format: ["@cucumber/pretty-formatter"],
+  forceExit: true,
   formatOptions: {
     colorsEnabled: true,
     snippets: true,
