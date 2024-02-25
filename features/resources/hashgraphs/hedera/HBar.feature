@@ -1,8 +1,9 @@
-Feature: This is a hello world Feature
+Feature: This feature means to test the transfer of hBar from one account to another
 
-  Scenario: This is a hello world Scenario
-    Given I create a new account 'account one' with an initial balance of '1000'
+  Background: 
+    Given I have a main account with an initial balance greater than '1000'
+
+  Scenario: This scenario tests the transfer of hBar from one account to another adress account
     And I create a new account 'account two' with an initial balance of '100'
-    When I transfer '100' hBar from 'account one' to 'account two'
-    Then the balance of 'account one' should be '900'
+    When I transfer '100' hBar from the main account to 'account two'
     And the balance of 'account two' should be '200'

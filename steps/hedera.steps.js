@@ -5,6 +5,7 @@ const {
   AccountBalanceQuery,
   Hbar,
   TransferTransaction,
+  Client,
 } = require("@hashgraph/sdk")
 
 Given(
@@ -29,6 +30,7 @@ Given(
     this.accounts = this.accounts || {}
     this.accounts[accountName] = {
       id: newAccountId,
+      privateKey: newAccountPrivateKey,
       expectedBalance: parseFloat(initialBalance),
     }
 
@@ -37,23 +39,13 @@ Given(
 )
 
 When(
-  "I transfer {string} hBar from {string} to {string}",
-  async function (amountToTransfor, accountToTransferFrom, accountToTransferTo) {
+  "I transfer {string} hBar from the main account to {string}",
+  async function (amountToTransfor, accountToTransferTo) {
     amountToTransfor = parseFloat(amountToTransfor)
     // Input validation
-    if (!this.accounts[accountToTransferFrom]) {
-      throw new Error(
-        `Account ${accountToTransferFrom} does not exist. Please create it first`
-      )
-    }
     if (!this.accounts[accountToTransferTo]) {
       throw new Error(
         `Account ${accountToTransferTo} does not exist. Please create it first`
-      )
-    }
-    if (this.accounts[accountToTransferFrom].expectedBalance < amountToTransfor) {
-      throw new Error(
-        `Account ${accountToTransferFrom} does not have enough balance to transfer ${amountToTransfor}`
       )
     }
     if (this.accounts[accountToTransferTo].expectedBalance < amountToTransfor) {
@@ -62,25 +54,24 @@ When(
       )
     }
 
-    // Transfer
-    const transaction = await new TransferTransaction()
-      .addHbarTransfer(
-        this.accounts[accountToTransferFrom].id,
-        Hbar.fromTinybars(-1 * amountToTransfor)
-      )
+    mainBalance = await this.getBalanceForAccount("main")
+    const sendHbar = await new TransferTransaction()
+      .addHbarTransfer(this.accounts.main.id, Hbar.fromTinybars(-amountToTransfor))
       .addHbarTransfer(
         this.accounts[accountToTransferTo].id,
         Hbar.fromTinybars(amountToTransfor)
       )
       .execute(this.client)
 
+    // Verify the transaction reached consensus
+    const transactionReceipt = await sendHbar.getReceipt(this.client)
+    console.log(
+      "\nThe transfer transaction from my account to the new account was: " +
+        transactionReceipt.status.toString()
+    )
     // Update the expected balances
-    this.accounts[accountToTransferFrom].expectedBalance -= amountToTransfor
+    this.accounts.main.expectedBalance -= amountToTransfor
     this.accounts[accountToTransferTo].expectedBalance += amountToTransfor
-
-    // Confirm the transaction reached consensus
-    //const getReceipt = await transaction.getReceipt(this.client)
-    //console.log("The transfer was successful: " + getReceipt.status.toString())
   }
 )
 
@@ -91,18 +82,41 @@ Then(
     if (!this.accounts[accountName]) {
       throw new Error(`Account ${accountName} does not exist. Please create it first`)
     }
+
+    // Throw error for Cucumber writer to check values.
     if (this.accounts[accountName].expectedBalance !== expectedBalance) {
       throw new Error(
         `Account ${accountName} has a balance of ${this.accounts[accountName].expectedBalance} but it should be ${expectedBalance}`
       )
     }
-    const balance = await new AccountBalanceQuery()
-      .setAccountId(this.accounts[accountName].id)
-      .execute(this.client)
-    if (balance.hbars.toTinybars() !== expectedBalance) {
+    const balance = await this.getBalanceForAccount(accountName)
+    if (balance.toString() !== expectedBalance.toString()) {
       throw new Error(
-        `Account ${accountName} has a balance of ${balance.hbars.toTinybars()} but it should be ${expectedBalance}`
+        `Account ${accountName} has a balance of ${balance} but it should be ${expectedBalance}`
       )
     }
   }
 )
+
+Given(
+  "I have a main account with an initial balance greater than {string}",
+  async function (recommendedBalance) {
+    recommendedBalance = parseFloat(recommendedBalance)
+    const mainBalance = await this.getBalanceForAccount("main")
+    this.accounts.main.expectedBalance = mainBalance
+    if (mainBalance < recommendedBalance) {
+      throw new Error(
+        `Main account balance is ${mainBalance} but it should be greater than ${recommendedBalance}`
+      )
+    }
+  }
+)
+
+Then("the balance of the main account should reflect the transfer", async function () {
+  const mainBalance = await this.getBalanceForAccount("main")
+  if (mainBalance !== this.accounts.main.expectedBalance) {
+    throw new Error(
+      `Main account has a balance of ${mainBalance} but it should be ${this.accounts.main.expectedBalance}`
+    )
+  }
+})
