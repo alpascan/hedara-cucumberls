@@ -2,10 +2,9 @@ const { Given, When, Then } = require("@cucumber/cucumber")
 const {
   PrivateKey,
   AccountCreateTransaction,
-  AccountBalanceQuery,
   Hbar,
   TransferTransaction,
-  Client,
+  PublicKey,
 } = require("@hashgraph/sdk")
 
 Given(
@@ -54,8 +53,8 @@ When(
       )
     }
 
-    mainBalance = await this.getBalanceForAccount("main")
-    const sendHbar = await new TransferTransaction()
+    // Create the transfer transaction
+    const hbarTransaction = await new TransferTransaction()
       .addHbarTransfer(this.accounts.main.id, Hbar.fromTinybars(-amountToTransfor))
       .addHbarTransfer(
         this.accounts[accountToTransferTo].id,
@@ -64,7 +63,7 @@ When(
       .execute(this.client)
 
     // Verify the transaction reached consensus
-    const transactionReceipt = await sendHbar.getReceipt(this.client)
+    const transactionReceipt = await hbarTransaction.getReceipt(this.client)
     console.log(
       "\nThe transfer transaction from my account to the new account was: " +
         transactionReceipt.status.toString()
@@ -78,18 +77,22 @@ When(
 Then(
   "the balance of {string} should be {string}",
   async function (accountName, expectedBalance) {
+    // Input validation
     expectedBalance = parseFloat(expectedBalance)
     if (!this.accounts[accountName]) {
       throw new Error(`Account ${accountName} does not exist. Please create it first`)
     }
 
-    // Throw error for Cucumber writer to check values.
     if (this.accounts[accountName].expectedBalance !== expectedBalance) {
       throw new Error(
         `Account ${accountName} has a balance of ${this.accounts[accountName].expectedBalance} but it should be ${expectedBalance}`
       )
     }
+
+    // Get the actual balance from the network
     const balance = await this.getBalanceForAccount(accountName)
+
+    // Compare the actual balance with the expected balance
     if (balance.toString() !== expectedBalance.toString()) {
       throw new Error(
         `Account ${accountName} has a balance of ${balance} but it should be ${expectedBalance}`
@@ -120,3 +123,47 @@ Then("the balance of the main account should reflect the transfer", async functi
     )
   }
 })
+
+Then("I generate an alias {string}", async function (accountName) {
+  this.accounts[accountName] = {
+    privateKey: PrivateKey.generateED25519(),
+  } // expceting to generate a base32 string here?
+
+  // acording to https://github.com/hashgraph/hedera-sdk-js/blob/develop/examples/account-alias.js
+  this.accounts[accountName].alias =
+    this.accounts[accountName].privateKey.publicKey.toString()
+  this.accounts[accountName].id = PublicKey.fromString(
+    this.accounts[accountName].alias
+  ).toAccountId(0, 0)
+})
+
+Then(
+  "I transfer {string} hBar from the main account to the alias {string}",
+  async function (transferAmount, accountToTransferTo) {
+    if (!this.accounts[accountToTransferTo].id) {
+      throw new Error(
+        `Alias ${accountToTransferTo} does not exist. Please create it first`
+      )
+    }
+    transferAmount = parseFloat(transferAmount)
+    if (this.accounts.main.expectedBalance < transferAmount) {
+      throw new Error(
+        `Main account does not have enough balance to transfer ${transferAmount}`
+      )
+    }
+    this.accounts.main.expectedBalance -= transferAmount
+    this.accounts[accountToTransferTo].expectedBalance = transferAmount
+    const hbarTransaction = await new TransferTransaction()
+      .addHbarTransfer(this.accounts.main.id, Hbar.fromTinybars(-transferAmount))
+      .addHbarTransfer(
+        this.accounts[accountToTransferTo].id,
+        Hbar.fromTinybars(transferAmount)
+      )
+      .execute(this.client)
+    const transactionReceipt = await hbarTransaction.getReceipt(this.client)
+    console.log(
+      "\nThe transfer transaction from the main account to the alias: " +
+        transactionReceipt.status.toString()
+    )
+  }
+)

@@ -8,6 +8,15 @@
       "runtimeArgs": ["test"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Run only @wip tests",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["test", "--tags=@wip"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
     }
   ]
 }
