@@ -8,7 +8,6 @@ Feature: This feature means to test the transfer of hBar from one account to ano
     When I transfer '100' hBar from the main account to 'account one'
     Then the balance of 'account one' should be '200'
 
-  @wip
   Scenario: This scerario tests the transfer of hbar from one account to an alias
     And I generate an alias 'alias two'
     And I transfer '100' hBar from the main account to the alias 'alias two'

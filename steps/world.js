@@ -1,5 +1,12 @@
 let { setWorldConstructor, World } = require("@cucumber/cucumber")
-let { Client, AccountBalanceQuery, Hbar } = require("@hashgraph/sdk")
+let {
+  Client,
+  AccountBalanceQuery,
+  Hbar,
+  PrivateKey,
+  AccountCreateTransaction,
+  TransferTransaction,
+} = require("@hashgraph/sdk")
 
 require("dotenv").config()
 
@@ -13,6 +20,8 @@ class CustomWorld extends World {
       expectedBalance: 1000,
     },
   }
+
+  ftokenId = null
   myAccountId = null
   myPrivateKey = null
   constructor(options) {
@@ -33,7 +42,9 @@ class CustomWorld extends World {
     return balance.hbars.toTinybars()
   }
 
-  async createAccount() {
+  async createAccount(accountName, initialBalance = 0) {
+    initialBalance = parseFloat(initialBalance)
+    // Generate a new key pair
     const newAccountPrivateKey = PrivateKey.generateED25519()
     const newAccountPublicKey = newAccountPrivateKey.publicKey
 
@@ -47,10 +58,11 @@ class CustomWorld extends World {
     const getReceipt = await newAccount.getReceipt(this.client)
     const newAccountId = getReceipt.accountId
 
-    // Return the new account object
-    return {
+    // Set the new account object
+    this.accounts[accountName] = {
       id: newAccountId,
       privateKey: newAccountPrivateKey,
+      expectedBalance: initialBalance,
     }
   }
 

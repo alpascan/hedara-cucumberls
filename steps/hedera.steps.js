@@ -1,39 +1,21 @@
 const { Given, When, Then } = require("@cucumber/cucumber")
 const {
+  AccountId,
   PrivateKey,
-  AccountCreateTransaction,
   Hbar,
   TransferTransaction,
   PublicKey,
+  TokenType,
+  TokenCreateTransaction,
+  TokenSupplyType,
+  TokenAssociateTransaction,
+  AccountBalanceQuery,
 } = require("@hashgraph/sdk")
 
 Given(
   "I create a new account {string} with an initial balance of {string}",
   async function (accountName, initialBalance) {
-    initialBalance = parseFloat(initialBalance)
-    // Generate a new key pair
-    const newAccountPrivateKey = PrivateKey.generateED25519()
-    const newAccountPublicKey = newAccountPrivateKey.publicKey
-
-    // Create the new account
-    const newAccount = await new AccountCreateTransaction()
-      .setKey(newAccountPublicKey)
-      .setInitialBalance(Hbar.fromTinybars(initialBalance))
-      .execute(this.client)
-
-    // Get the new account ID
-    const getReceipt = await newAccount.getReceipt(this.client)
-    const newAccountId = getReceipt.accountId
-
-    // Store the account ID and expected balance
-    this.accounts = this.accounts || {}
-    this.accounts[accountName] = {
-      id: newAccountId,
-      privateKey: newAccountPrivateKey,
-      expectedBalance: parseFloat(initialBalance),
-    }
-
-    console.log("The new account ID is: " + newAccountId)
+    await this.createAccount(accountName, initialBalance)
   }
 )
 
@@ -167,3 +149,217 @@ Then(
     )
   }
 )
+
+Given("I create a new account {string}", async function (accountName) {
+  await this.createAccount(accountName)
+})
+
+Given("I create a fungible token with the following details", async function (dataTable) {
+  const tokenName = dataTable.rowsHash().tokenName
+  const tokenSymbol = dataTable.rowsHash().tokenSymbol
+  const tokenDecimals = parseInt(dataTable.rowsHash().tokenDecimals)
+  const initialSupply = parseFloat(dataTable.rowsHash().initialSupply)
+  const treasuryAccountId = AccountId.fromString(this.accounts.main.id)
+  const treasuryPrivateKey = PrivateKey.fromString(this.accounts.main.privateKey)
+  let tokenCreateTransaction = await new TokenCreateTransaction()
+    .setTokenName(tokenName)
+    .setTokenSymbol(tokenSymbol)
+    .setTokenType(TokenType.FungibleCommon)
+    .setDecimals(tokenDecimals)
+    .setInitialSupply(initialSupply)
+    .setTreasuryAccountId(treasuryAccountId)
+    .setSupplyType(TokenSupplyType.Infinite)
+    .setSupplyKey(treasuryPrivateKey)
+    .freezeWith(this.client)
+  const tokenCreateTxSigned = await tokenCreateTransaction.sign(
+    this.accounts.main.privateKey
+  )
+  const tokenCreateTxSubmitted = await tokenCreateTxSigned.execute(this.client)
+  const tokenCreateReceipt = await tokenCreateTxSubmitted.getReceipt(this.client)
+  this.ftokenId = tokenCreateReceipt.tokenId
+
+  console.log(`The new fungible token ID is: ${this.ftokenId}`)
+})
+
+Then(
+  "the token balance of {string} should be {string}",
+  async function (accountToBeQueried, expectedBalance) {
+    accountBalance = await new AccountBalanceQuery()
+      .setAccountId(this.accounts[accountToBeQueried].id)
+      .execute(this.client)
+
+    assert.equal(
+      accountBalance.tokens.get(this.ftokenId).toString(),
+      expectedBalance,
+      `The token balance of ${accountToBeQueried} is not ${expectedBalance}`
+    )
+  }
+)
+
+Given("I associate the token with {string}", async function (accountName) {
+  if (!this.ftokenId) {
+    throw new Error("Token ID not set")
+  }
+
+  if (!this.accounts[accountName]) {
+    throw new Error(`Account ${accountName} does not exist. Please create it first`)
+  }
+
+  let associateTransaction = await new TokenAssociateTransaction()
+    .setAccountId(this.accounts[accountToTransferTo].id)
+    .setTokenIds([tokenId])
+    .freezeWith(this.client)
+    .sign(this.accounts[accountName].privateKey)
+
+  let associateTransactionResponse = await associateTransaction.execute(this.client)
+  let associateTransactionReceipt = await associateTransactionResponse.getReceipt(
+    this.client
+  )
+
+  console.log(associateTransactionReceipt.status.toString())
+})
+
+Given(
+  "I transfer {string} tokens from the main account to {string}",
+  async function (ammountToTransfer, accountToTransferTo) {
+    if (!this.ftokenId) {
+      throw new Error("Token ID not set")
+    }
+    if (!this.accounts[accountToTransferTo]) {
+      throw new Error(
+        `Account ${accountToTransferTo} does not exist. Please create it first`
+      )
+    }
+    ammountToTransfer = parseFloat(ammountToTransfer)
+    let tokenTransferTransaction = await new TransferTransaction()
+      .addTokenTransfer(this.ftokenId, this.accounts.main.id, -ammountToTransfer)
+      .addTokenTransfer(
+        this.ftokenId,
+        this.accounts[accountToTransferTo].id,
+        ammountToTransfer
+      )
+      .freezeWith(this.client)
+      .sign(this.accounts.main.privateKey)
+
+    let tokenTransferTransactionResponse = await tokenTransferTransaction.execute(
+      this.client
+    )
+    let tokenTransferTransactionReceipt =
+      await tokenTransferTransactionResponse.getReceipt(this.client)
+
+    console.log(
+      "Token transaction finished with status ",
+      tokenTransferTransactionReceipt.status.toString()
+    )
+  }
+)
+
+Given(
+  "I create and mint a non-fungible token with the name {string}",
+  async function (nftName) {
+    if (!this.accounts.main.id || !this.accounts.main.privateKey) {
+      throw new Error("Main account not set up")
+    }
+    if (!this.client) {
+      throw new Error("Client not set up")
+    }
+
+    const tokenCreateTransaction = await new TokenCreateTransaction()
+      .setTokenName(nftName)
+      .setTokenSymbol("NFT")
+      .setTokenType(TokenType.NonFungibleUnique)
+      .setTreasuryAccountId(this.accounts.main.id)
+      .setAdminKey(this.accounts.main.privateKey)
+      .setInitialSupply(0)
+      .execute(this.client)
+
+    const tokenCreateReceipt = await tokenCreateTransaction.getReceipt(this.client)
+    this.nfTokenId = tokenCreateReceipt.tokenId
+    console.log(`The new NFT token ID is: ${this.nfTokenId}`)
+
+    // Don't really know where I can get these CID's from
+    const CID = [
+      Buffer.from(
+        "ipfs://bafyreiao6ajgsfji6qsgbqwdtjdu5gmul7tv2v3pd6kjgcw5o65b2ogst4/metadata.json"
+      ),
+      Buffer.from(
+        "ipfs://bafyreic463uarchq4mlufp7pvfkfut7zeqsqmn3b2x3jjxwcjqx6b5pk7q/metadata.json"
+      ),
+      Buffer.from(
+        "ipfs://bafyreihhja55q6h2rijscl3gra7a3ntiroyglz45z5wlyxdzs6kjh2dinu/metadata.json"
+      ),
+      Buffer.from(
+        "ipfs://bafyreidb23oehkttjbff3gdi4vz7mjijcxjyxadwg32pngod4huozcwphu/metadata.json"
+      ),
+      Buffer.from(
+        "ipfs://bafyreie7ftl6erd5etz5gscfwfiwjmht3b52cevdrf7hjwxx5ddns7zneu/metadata.json"
+      ),
+    ]
+
+    const mintTransaction = await new TokenMintTransaction()
+      .setTokenId(this.nfTokenId)
+      .setMetadata(CID)
+      .setMaxTransactionFee(new Hbar(20))
+      .freezeWith(this.client)
+      .sign(this.accounts.main.privateKey)
+
+    const mintTransactionResponse = await mintTransaction.execute(this.client)
+    const mintTransactionReceipt = await mintTransactionResponse.getReceipt(this.client)
+
+    console.log(
+      "The NFT mint transaction finished with status ",
+      mintTransactionReceipt.status.toString()
+    )
+  }
+)
+
+Then(
+  "the NFT balance of {string} should be {string}",
+  async function (accountName, expectedBalance) {
+    if (!this.nfTokenId) {
+      throw new Error("Token ID not set")
+    }
+    if (!this.accounts[accountName]) {
+      throw new Error(`Account ${accountName} does not exist. Please create it first`)
+    }
+    const accountBalance = await new AccountBalanceQuery()
+      .setAccountId(this.accounts[accountName].id)
+      .execute(this.client)
+
+    balace = accountBalance.tokens._map.get(this.nfTokenId).toString()
+
+    assert.equal(
+      balace,
+      expectedBalance,
+      `The NFT balance of ${accountName} is not ${expectedBalance}`
+    )
+  }
+)
+
+Given("I transfer the NFT to {string}", async function (accountName) {
+  if (!this.nfTokenId) {
+    throw new Error("Token ID not set")
+  }
+  if (!this.accounts[accountName]) {
+    throw new Error(`Account ${accountName} does not exist. Please create it first`)
+  }
+  const TransferTransaction = await new TokenTransferTransaction()
+    .addftTransfer(
+      this.nfTokenId,
+      1,
+      this.accounts.main.id,
+      this.accounts[accountName].id
+    )
+    .freezeWith(this.client)
+    .sign(this.accounts.main.privateKey)
+
+  const TransferTransactionResponse = await TransferTransaction.execute(this.client)
+  const TransferTransactionReceipt = await TransferTransactionResponse.getReceipt(
+    this.client
+  )
+
+  console.log(
+    "The NFT transfer transaction finished with status ",
+    TransferTransactionReceipt.status.toString()
+  )
+})
